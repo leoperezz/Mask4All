@@ -1,0 +1,8 @@
+wandb
+segmentation-models-pytorch
+huggingface_hub
+transformers[torch]
+transformers 
+evaluate 
+datasets
+transformers[torch]
