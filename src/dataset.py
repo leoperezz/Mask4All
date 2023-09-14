@@ -38,10 +38,9 @@ class DatasetMask4All(Dataset):
 
         image_path = join(self.image_dir_path,self.images_dir[idx])
         mask_path = join(self.mask_dir_path,self.masks_dir[idx])
+        inputs = self.transform.transform(image_path,mask_path)
 
-        image_pt,mask_pt = self.transform.transform(image_path,mask_path)
-
-        return (image_pt,mask_pt)
+        return inputs
     
 class DatasetMask4AllPred(Dataset):
 

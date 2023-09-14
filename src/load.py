@@ -1,10 +1,18 @@
+import os
+import torch
 from torch.optim import Adam,AdamW
 from torch.utils.data import DataLoader
-import os
-from .dataset import DatasetMask4All,DatasetMask4AllPred
-from .model import Model
-from .modeling.unet_pp.unet_pp import UnetPlusPlus
-from .transforms import TransformUnetPlusPlus
+
+import sys
+sys.path.append('/home/lperez/code/Satellite/methods/Mask4All')
+
+from src.dataset import DatasetMask4All,DatasetMask4AllPred
+from src.model import Model
+from src.modeling.unet_pp.unet_pp import UnetPlusPlus
+from src.modeling.mask2former.mask2former import Mask2Former
+from src.transforms import (
+    TransformUnetPlusPlus,
+    TransformMask2Former)
 
 
 
@@ -14,11 +22,14 @@ def load_model(config,device):
     Load the model imported from segmentation_models_pytorch
     '''
     name = config["model"]["name"]
-    classes = config["model"]["classes"]
     
     if name == 'unet++':
-        model = UnetPlusPlus(classes=classes)
-    return model.to(device)
+        model = UnetPlusPlus(config,device)
+    
+    elif name == 'mask2former':
+        model = Mask2Former(config,device)
+    
+    return model
 
 def load_optim(config,model:Model):
 
@@ -41,8 +52,13 @@ def load_transform(config):
     if name_model == 'unet++':
         transformer = TransformUnetPlusPlus(resize)
 
+    if name_model == 'mask2former':
+        transformer = TransformMask2Former(resize)
 
     return transformer
+
+def collate_fn(batch):
+    return batch
 
 def load_dataset(config):
 
@@ -66,15 +82,18 @@ def load_dataset(config):
     train_loader = DataLoader(dataset=train_ds,
                               batch_size=batch_size,
                               shuffle=True,
-                              num_workers=os.cpu_count())
+                              num_workers=os.cpu_count(),
+                              collate_fn=collate_fn)
     
     val_loader = DataLoader(dataset=val_ds,
                             batch_size=batch_size,
-                            shuffle=True)
+                            shuffle=True,
+                            collate_fn=collate_fn)
     
     test_loader = DataLoader(dataset=test_ds,
                              batch_size=batch_size,
-                             shuffle=False)
+                             shuffle=False,
+                             collate_fn=collate_fn)
     
     return (train_loader,val_loader,test_loader)
 
@@ -85,3 +104,13 @@ def load_pred_dataset(images_dir,config):
     return dataset
 
 
+
+
+if __name__ == '__main__':
+
+    from src.logg import load_config
+
+    config = load_config('/home/lperez/code/Satellite/methods/Mask4All/configs/config_drone.json')
+    train_loader,_,_ = load_dataset(config)
+    for inputs in train_loader:
+        print(inputs)

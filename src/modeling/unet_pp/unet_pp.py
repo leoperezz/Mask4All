@@ -5,7 +5,7 @@ from torch import Tensor
 
 import segmentation_models_pytorch as smp
 
-from typing import Iterator,Tuple
+from typing import Iterator,Tuple,Dict
 from PIL import Image
 
 import sys
@@ -16,9 +16,12 @@ from src.functions import process_mask
 
 class UnetPlusPlus(Model):
 
-    def __init__(self,classes:int):
+    def __init__(self,config,device:torch.device):
         
-        self.model = self._init_model(classes=classes)
+        self.config = config
+        self.device = device
+        self.model = self._init_model(classes=self.config["model"]["classes"])
+        self.model.to(device)
     
     def _init_model(self,
                     classes:int,
@@ -49,16 +52,24 @@ class UnetPlusPlus(Model):
                                       ignore_index=0)
         return  loss_fn.forward(pred,mask)
     
-    def forward(self,image: Tensor) -> Tensor:
-        return self.model.forward(image)
+    def forward(self,inputs:Dict[str,Tensor]) -> Dict[str,Tensor]:
+        
+        image = inputs["image"].to(self.device)
+        mask = inputs["mask"].to(self.device)
+        
+        pred = self.model.forward(image)
+        if mask is not None:
+            loss = self.compute_loss(pred,mask)
+        else:
+            loss = None
+        return dict(loss=loss,mask_predicted=pred)
 
     def postprocess(self,
                     pred: Tensor,
-                    origin_size:Tuple[int,int],
-                    config) -> Image.Image:
+                    origin_size:Tuple[int,int]) -> Image.Image:
 
         pred = pred.argmax(dim=1).squeeze().detach().cpu().numpy()
-        pred = process_mask(pred,origin_size,config["dataset"])
+        pred = process_mask(pred,origin_size,self.config["dataset"])
         return pred
 
     def load_ckpt(self,ckpt_path:str,device:torch.device):

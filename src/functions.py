@@ -17,21 +17,33 @@ def get_values_metrics(pred:Tensor,
 
     return dice_value,iou_value
 
+def generate_mask(inputs):
+    masks = []
+    for i in inputs:
+        masks.append(i["mask"].unsqueeze(dim=0))
+    masks = torch.cat(masks,dim=0)
+    return masks
+
+def generate_images(inputs):
+    images = []
+    for i in inputs:
+        images.append(i["image"].unsqueeze(dim=0))
+    images = torch.cat(images,dim=0)
+    return images
+
 def train_step(model:Model,
                optim:torch.optim.Optimizer,
-               image:torch.Tensor,
-               mask:torch.Tensor,
-               metrics:dict,
-               device:torch.device):
-    
-    image = image.to(device)
-    mask = mask.to(device).type(torch.int64)
+               inputs:Dict[str,Tensor],
+               metrics:dict):
 
     optim.zero_grad()
 
-    pred = model.forward(image)
+    mask = generate_mask(inputs)
 
-    loss = model.compute_loss(pred,mask)
+    output = model.forward(inputs)
+
+    pred = output['mask_predicted']
+    loss = output['loss']
 
     loss.backward()
 
@@ -44,17 +56,15 @@ def train_step(model:Model,
     return loss.item(),dice_value.item(),iou_value.item()
 
 def val_step(model:Model,
-             image:Tensor,
-             mask:Tensor,
-             metrics:dict,
-             device:torch.device):
+             inputs:Dict[str,Tensor],
+             metrics:dict):
+    
+    mask = generate_mask(inputs)
 
-    image = image.to(device)
-    mask = mask.to(device).type(torch.int64)
+    output = model.forward(inputs)
 
-    pred = model.forward(image)
-
-    loss = model.compute_loss(pred,mask)
+    pred = output['mask_predicted']
+    loss = output['loss']
 
     dice_value,iou_value = get_values_metrics(pred,mask,metrics)
     

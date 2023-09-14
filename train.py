@@ -10,8 +10,11 @@ import logging
 
 from src import functions,logg,load
 from src.model import Model
+from src.functions import generate_mask,generate_images
 
 BIG_LOSS = 1000
+NO_WANDB = True
+
 
 def get_args():
 
@@ -26,23 +29,22 @@ def get_args():
 def train(model:Model,
           optim:Optimizer,
           train_loader,
-          device:torch.device,
           experiment,
           config):
     
     model.train()
 
-    metrics=dict(dice=Dice(num_classes=config["model"]["classes"]).to(device),
-                 iou=JaccardIndex(task='multiclass',num_classes=config["model"]["classes"]).to(device))
+    metrics=dict(dice=Dice(num_classes=config["model"]["classes"]),
+                 iou=JaccardIndex(task='multiclass',num_classes=config["model"]["classes"]))
 
     total_loss = 0
     total_iou = 0
     total_dice = 0
     total_batches = len(train_loader)
 
-    for image,mask in tqdm(train_loader,total=total_batches):
+    for inputs in tqdm(train_loader,total=total_batches):
 
-        loss,dice,iou = functions.train_step(model,optim,image,mask,metrics,device) 
+        loss,dice,iou = functions.train_step(model,optim,inputs,metrics) 
 
         experiment.log({
             "train loss step":loss,
@@ -61,25 +63,24 @@ def train(model:Model,
 
     return output
 
-def evaluate(model:nn.Module,
+def evaluate(model:Model,
              val_loader,
-             device:torch.device,
              experiment,
              config):
     
     model.eval()
 
-    metrics=dict(dice=Dice(num_classes=config["model"]["classes"]).to(device),
-                 iou=JaccardIndex(task='multiclass',num_classes=config["model"]["classes"]).to(device))
+    metrics=dict(dice=Dice(num_classes=config["model"]["classes"]),
+                 iou=JaccardIndex(task='multiclass',num_classes=config["model"]["classes"]))
 
     total_loss = 0
     total_iou = 0
     total_dice = 0
     total_batches = len(val_loader)
 
-    for image,mask in tqdm(val_loader,total=total_batches):
+    for inputs in tqdm(val_loader,total=total_batches):
 
-        loss,dice,iou = functions.val_step(model,image,mask,metrics,device)
+        loss,dice,iou = functions.val_step(model,inputs,metrics)
 
         total_loss += loss
         total_dice += dice
@@ -87,8 +88,11 @@ def evaluate(model:nn.Module,
 
 
     origin_size=config["training"]["resize"]
-    pred = functions.predict_single_image(image[0],model,device,origin_size,config["dataset"])
-    logg.log_wandb_val_images(mask[0],pred,experiment,config)
+    original_size = (origin_size,origin_size)
+    image = generate_images(inputs)[0]
+    mask = generate_mask(inputs)[0]
+    pred = model.predict(image.unsqueeze(0),original_size)
+    logg.log_wandb_val_images(mask,pred,experiment,config)
 
     output = dict(loss=total_loss/total_batches,
                   dice=total_dice/total_batches,
@@ -120,8 +124,8 @@ if __name__ == '__main__':
         
         logging.info(f"Epoch {epoch+1}: ")
         
-        output_train = train(model,optim,train_loader,device,experiment,config)
-        output_val = evaluate(model,val_loader,device,experiment,config)
+        output_train = train(model,optim,train_loader,experiment,config)
+        output_val = evaluate(model,val_loader,experiment,config)
 
         logg.logging_info_epoch(output_train,output_val,experiment)    
 

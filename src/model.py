@@ -6,12 +6,12 @@ from torch import nn
 from torch import Tensor
 
 from PIL import Image
-from typing import Iterator
+from typing import Iterator,Dict,Tuple
 
 
 class Model:
 
-    def __init__(self):
+    def __init__(self,config,device):
 
         self.model = self._init_model()
     
@@ -31,7 +31,11 @@ class Model:
         pass
 
     @abstractmethod
-    def forward(self,image:Tensor) -> Tensor:
+    def forward(self,inputs) -> Dict[str,Tensor]:
+        pass
+    
+    @abstractmethod
+    def predict(self,image:Tensor,original_size:Tuple[int,int]):
         pass
 
     @abstractmethod
@@ -41,5 +45,11 @@ class Model:
     @abstractmethod
     def to(self,device:torch.device):
         pass
+
+    def train(self):
+        self.model.train()
+
+    def eval(self):
+        self.model.eval()
 
 
